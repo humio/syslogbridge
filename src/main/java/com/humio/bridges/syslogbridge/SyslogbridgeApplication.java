@@ -13,6 +13,7 @@ import org.springframework.integration.dsl.IntegrationFlow;
 import org.springframework.integration.dsl.IntegrationFlows;
 import org.springframework.integration.dsl.Transformers;
 import org.springframework.integration.dsl.channel.MessageChannels;
+import org.springframework.integration.handler.LoggingHandler;
 import org.springframework.integration.handler.advice.RequestHandlerRetryAdvice;
 import org.springframework.integration.http.dsl.Http;
 import org.springframework.integration.transformer.GenericTransformer;
@@ -21,8 +22,11 @@ import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.util.PathMatcher;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonList;
 
@@ -56,25 +60,31 @@ public class SyslogbridgeApplication {
                 )
                 .channel(MessageChannels.executor(Executors.newFixedThreadPool(10)))
                 .aggregate(aggregatorSpec -> aggregatorSpec
+                        .outputProcessor(group -> group.getMessages().stream()
+                                .collect(Collectors.toMap(o -> o.getHeaders().get("humio_type", String.class), o -> singletonList(o.getPayload().toString()), SyslogbridgeApplication::mergeLists)))
                         .sendPartialResultOnExpiry(true)
                         .expireGroupsUponCompletion(true)
-                        .correlationStrategy(message -> message.getHeaders().get("humio_dataspace") + ":" + message.getHeaders().get("humio_type") + ":" + message.getHeaders().get("humio_ingesttoken"))
+                        .correlationStrategy(message -> message.getHeaders().get("humio_dataspace") + ":" + message.getHeaders().get("humio_ingesttoken"))
                         .groupTimeout(1000)
                         .releaseStrategy(new MessageCountReleaseStrategy(500))
                 )
-                .transform(new GenericTransformer<Message<List<String>>, Message<List<HumioMessages>>>() {
+                .transform(new GenericTransformer<Message<Map<String, List<String>>>, Message<List<HumioMessages>>>() {
                     @Override
-                    public Message<List<HumioMessages>> transform(Message<List<String>> source) {
+                    public Message<List<HumioMessages>> transform(Message<Map<String, List<String>>> source) {
                         return MessageBuilder
-                                .withPayload(singletonList(HumioMessages.builder()
-                                        .type(source.getHeaders().get("humio_type", String.class))
-                                        .messages(source.getPayload())
-                                        .build()))
+                                .withPayload(source.getPayload().entrySet().stream()
+                                        .map(entry -> HumioMessages.builder()
+                                                .type(entry.getKey())
+                                                .messages(entry.getValue())
+                                                .build()
+                                        ).collect(Collectors.toList())
+                                )
                                 .copyHeaders(source.getHeaders())
                                 .build();
                     }
                 })
                 .channel(MessageChannels.executor(Executors.newFixedThreadPool(10)))
+                .<List<HumioMessages>>log(LoggingHandler.Level.INFO, message -> "sending count=" + message.getPayload().stream().mapToLong(humioMessages -> humioMessages.getMessages().size()).sum())
                 .transform(Transformers.toJson("application/json"))
                 .enrichHeaders(spec -> spec.headerFunction("Authorization", message -> "Bearer " + message.getHeaders().get("humio_ingesttoken")))
                 .handle(
@@ -92,5 +102,10 @@ public class SyslogbridgeApplication {
         return new RequestHandlerRetryAdvice();
     }
 
+    private static <T> List<T> mergeLists(List<T> left, List<T> right) {
+        List<T> result = new ArrayList<>(left);
+        result.addAll(right);
+        return result;
+    }
 
 }
