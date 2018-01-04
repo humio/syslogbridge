@@ -13,6 +13,7 @@ import org.springframework.integration.dsl.IntegrationFlow;
 import org.springframework.integration.dsl.IntegrationFlows;
 import org.springframework.integration.dsl.Transformers;
 import org.springframework.integration.dsl.channel.MessageChannels;
+import org.springframework.integration.handler.LoggingHandler;
 import org.springframework.integration.handler.advice.RequestHandlerRetryAdvice;
 import org.springframework.integration.http.dsl.Http;
 import org.springframework.integration.transformer.GenericTransformer;
@@ -75,15 +76,15 @@ public class SyslogbridgeApplication {
                     }
                 })
                 .channel(MessageChannels.executor(Executors.newFixedThreadPool(10)))
+                .<List>log(LoggingHandler.Level.INFO, message -> "sending count=" + message.getPayload().size() + " messages to dataspace=" + message.getHeaders().get("humio_dataspace"))
                 .transform(Transformers.toJson("application/json"))
                 .enrichHeaders(spec -> spec.headerFunction("Authorization", message -> "Bearer " + message.getHeaders().get("humio_ingesttoken")))
                 .handle(
-                        Http.outboundGateway(humioConfig.getUrlPrefix() + "/api/v1/dataspaces/{dataspace}/ingest-messages")
+                        Http.outboundChannelAdapter(humioConfig.getUrlPrefix() + "/api/v1/dataspaces/{dataspace}/ingest-messages")
                                 .httpMethod(HttpMethod.POST)
                                 .uriVariable("dataspace", message -> message.getHeaders().get("humio_dataspace")),
                         spec -> spec.advice(humioHttpClientAdvice)
                 )
-                .log()
                 .get();
     }
 
