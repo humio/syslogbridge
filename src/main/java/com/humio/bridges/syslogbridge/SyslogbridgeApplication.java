@@ -2,7 +2,6 @@ package com.humio.bridges.syslogbridge;
 
 import com.humio.bridges.syslogbridge.model.HumioConfig;
 import com.humio.bridges.syslogbridge.model.HumioMessages;
-import com.humio.bridges.syslogbridge.services.UrlPatternHeaderEnricher;
 import org.aopalliance.aop.Advice;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -26,7 +25,6 @@ import java.util.List;
 import java.util.concurrent.Executors;
 
 import static java.util.Collections.singletonList;
-import static java.util.Collections.singletonMap;
 
 @SpringBootApplication
 @IntegrationComponentScan
@@ -48,20 +46,21 @@ public class SyslogbridgeApplication {
     }
 
     @Bean
-    public IntegrationFlow syslogIntegrationFlow(HumioConfig humioConfig, Advice humioHttpClientAdvice, UrlPatternHeaderEnricher urlPatternHeaderEnricher) {
-        final String pattern = "/dataspaces/{humio_dataspace}/{humio_ingesttoken}/types/{humio_type}";
+    public IntegrationFlow syslogIntegrationFlow(HumioConfig humioConfig, Advice humioHttpClientAdvice) {
         return IntegrationFlows
-                .from(Http.inboundGateway(pattern))
+                .from(Http.inboundChannelAdapter("/dataspaces/{dataspace}/{ingesttoken}/types/{type}")
+                        .requestMapping(spec -> spec.methods(HttpMethod.POST))
+                        .headerExpression("humio_dataspace", "#pathVariables.dataspace")
+                        .headerExpression("humio_ingesttoken", "#pathVariables.ingesttoken")
+                        .headerExpression("humio_type", "#pathVariables.type")
+                )
                 .channel(MessageChannels.executor(Executors.newFixedThreadPool(10)))
-                .enrichHeaders(singletonMap("http_requestPattern", pattern))
-                .transform(urlPatternHeaderEnricher)
                 .aggregate(aggregatorSpec -> aggregatorSpec
-                                .requiresReply(true)
-                                .sendPartialResultOnExpiry(true)
-                                .expireGroupsUponCompletion(true)
-                                .correlationStrategy(message -> message.getHeaders().get("humio_dataspace") + ":" + message.getHeaders().get("humio_type") + ":" + message.getHeaders().get("humio_ingesttoken"))
-                                .groupTimeout(1000)
-                                .releaseStrategy(new MessageCountReleaseStrategy(500))
+                        .sendPartialResultOnExpiry(true)
+                        .expireGroupsUponCompletion(true)
+                        .correlationStrategy(message -> message.getHeaders().get("humio_dataspace") + ":" + message.getHeaders().get("humio_type") + ":" + message.getHeaders().get("humio_ingesttoken"))
+                        .groupTimeout(1000)
+                        .releaseStrategy(new MessageCountReleaseStrategy(500))
                 )
                 .transform(new GenericTransformer<Message<List<String>>, Message<List<HumioMessages>>>() {
                     @Override
@@ -87,7 +86,6 @@ public class SyslogbridgeApplication {
                 .log()
                 .get();
     }
-
 
     @Bean
     public Advice humioHttpClientAdvice() {
