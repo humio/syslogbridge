@@ -66,7 +66,7 @@ public class SyslogbridgeApplication {
                         .expireGroupsUponCompletion(true)
                         .correlationStrategy(message -> message.getHeaders().get("humio_dataspace") + ":" + message.getHeaders().get("humio_ingesttoken"))
                         .groupTimeout(1000)
-                        .releaseStrategy(new MessageCountReleaseStrategy(500))
+                        .releaseStrategy(new MessageCountReleaseStrategy(200))
                 )
                 .transform(new GenericTransformer<Message<Map<String, List<String>>>, Message<List<HumioMessages>>>() {
                     @Override
