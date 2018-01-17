@@ -65,8 +65,8 @@ public class SyslogbridgeApplication {
                         .sendPartialResultOnExpiry(true)
                         .expireGroupsUponCompletion(true)
                         .correlationStrategy(message -> message.getHeaders().get("humio_dataspace") + ":" + message.getHeaders().get("humio_ingesttoken"))
-                        .groupTimeout(1000)
-                        .releaseStrategy(new MessageCountReleaseStrategy(200))
+                        .groupTimeout(humioConfig.getGroupTimeout())
+                        .releaseStrategy(new MessageCountReleaseStrategy(humioConfig.getMaxEvents()))
                 )
                 .transform(new GenericTransformer<Message<Map<String, List<String>>>, Message<List<HumioMessages>>>() {
                     @Override

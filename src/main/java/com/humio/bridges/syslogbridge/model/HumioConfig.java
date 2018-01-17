@@ -12,4 +12,14 @@ public class HumioConfig {
      * Humio host and protocol, i.e. https://cloud.humio.com
      */
     private String urlPrefix;
+
+    /**
+     * Maximum number of message per ingest
+     */
+    private int maxEvents;
+
+    /**
+     * Grouping timeout in millis
+     */
+    private int groupTimeout;
 }
