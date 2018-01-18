@@ -84,7 +84,7 @@ public class SyslogbridgeApplication {
                     }
                 })
                 .channel(MessageChannels.executor(Executors.newFixedThreadPool(10)))
-                .<List<HumioMessages>>log(LoggingHandler.Level.INFO, message -> "sending count=" + message.getPayload().stream().mapToLong(humioMessages -> humioMessages.getMessages().size()).sum() + " to dataspace=" + message.getHeaders().get("humio_dataspace", String.class))
+                .<List<HumioMessages>>log(LoggingHandler.Level.INFO, message -> "sending count=" + message.getPayload().stream().mapToLong(humioMessages -> humioMessages.getMessages().size()).sum() + " messages to dataspace=" + message.getHeaders().get("humio_dataspace", String.class))
                 .transform(Transformers.toJson("application/json"))
                 .enrichHeaders(spec -> spec.headerFunction("Authorization", message -> "Bearer " + message.getHeaders().get("humio_ingesttoken")))
                 .handle(
