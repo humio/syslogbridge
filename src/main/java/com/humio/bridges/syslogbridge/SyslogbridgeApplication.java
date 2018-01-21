@@ -1,8 +1,10 @@
 package com.humio.bridges.syslogbridge;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.humio.bridges.syslogbridge.model.HumioConfig;
 import com.humio.bridges.syslogbridge.model.HumioMessages;
 import org.aopalliance.aop.Advice;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
@@ -34,6 +36,8 @@ import static java.util.Collections.singletonList;
 @IntegrationComponentScan
 public class SyslogbridgeApplication {
 
+    @Autowired
+    ObjectMapper objectMapper;
 
     public static void main(String[] args) {
         SpringApplication.run(SyslogbridgeApplication.class, args);
@@ -59,9 +63,17 @@ public class SyslogbridgeApplication {
                         .headerExpression("humio_type", "#pathVariables.type")
                 )
                 .channel(MessageChannels.executor(Executors.newFixedThreadPool(10)))
+                .transform(source -> {
+                    if (source instanceof String) {
+                        return ((String) source);
+                    } else if (source instanceof byte[]) {
+                        return new String(((byte[]) source));
+                    }
+                    return source.toString();
+                })
                 .aggregate(aggregatorSpec -> aggregatorSpec
                         .outputProcessor(group -> group.getMessages().stream()
-                                .collect(Collectors.toMap(o -> o.getHeaders().get("humio_type", String.class), o -> singletonList(o.getPayload().toString()), SyslogbridgeApplication::mergeLists)))
+                                .collect(Collectors.toMap(o -> o.getHeaders().get("humio_type", String.class), o -> singletonList(o.getPayload()), SyslogbridgeApplication::mergeLists)))
                         .sendPartialResultOnExpiry(true)
                         .expireGroupsUponCompletion(true)
                         .correlationStrategy(message -> message.getHeaders().get("humio_dataspace") + ":" + message.getHeaders().get("humio_ingesttoken"))
