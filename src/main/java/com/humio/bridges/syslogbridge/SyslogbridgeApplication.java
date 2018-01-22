@@ -36,9 +36,6 @@ import static java.util.Collections.singletonList;
 @IntegrationComponentScan
 public class SyslogbridgeApplication {
 
-    @Autowired
-    ObjectMapper objectMapper;
-
     public static void main(String[] args) {
         SpringApplication.run(SyslogbridgeApplication.class, args);
     }
