@@ -68,6 +68,19 @@
         </plugins>
     </build>
 
+    <distributionManagement>
+        <repository>
+            <id>humio-releases</id>
+            <name>Humio releases</name>
+            <url>https://nexus.internal.humio.com/repository/maven-releases/</url>
+        </repository>
+        <snapshotRepository>
+            <id>humio-snapshots</id>
+            <name>Humio snapshots</name>
+            <url>https://nexus.internal.humio.com/repository/maven-snapshots/</url>
+        </snapshotRepository>
+    </distributionManagement>
+
     <repositories>
         <repository>
             <id>spring-snapshots</id>
